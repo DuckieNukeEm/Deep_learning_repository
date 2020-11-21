@@ -15,9 +15,10 @@ class DataGenerator(Sequence):
     #https://towardsdatascience.com/keras-data-generators-and-how-to-use-them-b69129ed779c
     """
     def __init__(self,
-                 csv_file: pd.DataFrame, # file that has the images on it, as well as the image types
-                 y_var: str = 'grapheme_root', #'grapheme_root','vowel_diacritic','consonant_diacritic' 
-                 image_dir: str = 'Image_Dir',
+                 df: pd.DataFrame, # file that has the images on it, as well as the image types
+                 y_var: str = None, #'grapheme_root','vowel_diacritic','consonant_diacritic' 
+                 encoder: bool = None,
+                 image_dir: str = None,
                  to_fit: bool =True,
                  batch_size: int = 32,
                  dim: tuple = (90,160),
@@ -29,37 +30,67 @@ class DataGenerator(Sequence):
                  shuffle: bool =True,
                  sample_classes: int = 0,
                  save_model_path: bool = None):
-        """Initialization
-        :param csv_File #CSV file that has the path to the stores on it
-        :param y_var: a list of 'root','voewl','consonant'
-        :param to_fit: Provive the dependent variable as well
-        :param batch_size: The size of each batch to deliver
-        :param dim: dimensions of the photos to use
-        :param channels: The number of channals of the photo - 1 is bw, 3 is color, any other is customer
-        :param vertical_flip: (dbl) The percent chance to flip a photo along a vertical axis
-        :param horizontal_flip: (dbl) The percent chance to flip a photo along a horiszontal axis
-        :param rotate: (tuple - (prob, degree)) A two unit tuple, first is the % chance of rotate, the next is the amount of rotation
-        :param shear: (tuple - (prob, amt)) A two unit tuple, first is the % chance of shear, the next is the amount of shear
-        :param shuffle: True to shuffle label indexes after every epoch
-        :param sample_classes: random samle n number from each class
+        """Initialization of the DataGenerator Glass
+        
+        Arguments:
+             df {pd.DataFrame} - A pandas data frame that has the y variable and either
+                                     a) a file path to the image for each y 
+                                     or
+                                     b) all the X (having demnions listed in dim)
+            y_var - {str/int} - the column name/index of the y-var
+            encoder - {bool} - should the Y var be encoded
+            to_fit - {bool} - if using to fit the model, should it return the y-value as well?
+            batch_size - {int} - size of batches to deliver
+            dim - {tuple} - dimension of the images (regardless of the color scale)
+            channels - {int} - the number of color channels (generally 1 or 3)
+            vertical_flip - {float} - The percent chance to flip a photo along a vertical axis
+            horizontal_flip - (float) - The percent chance to flip a photo along a horiszontal axis
+            rotate - (tuple - (prob, degree)) - A tuple of two:
+                                                    1) the % chance of rotate
+                                                    2) The amount of rotation
+            shear - (tuple - (prob, amt)) - A two of two:
+                                                    1) The % chance of shear
+                                                    2) The amount of shear
+            shuffle - {bool} - shuffle label indexes after every epoch
+            sample_classes - {bool} - random samle n number from each class
         """
         
         #Getting Index that we will use to sort
         
-        self.Idx_List = np.arange(csv_file.shape[0])
+        self.Idx_List = np.arange(df.shape[0])
         
         # Loading y_Vars
-        if isinstance(y_var, list):
-            y_var = y_var[0]
-            
-        self.y_var = csv_file[y_var].values
-       
-        #TODO Move this to the aabove if statement, removing the need for y_var, and y
-        self.y_dim = 0
-        self.hot_encode_y()
-        #self.y = self.y_var
+        if y_var is not None:
+            if isinstance(y_var, list):
+                y_var = y_var[0]
+            is isinstance(df, pd.DataFrame):
+                self.y_var = df[y_var].values
+            else:
+                self.y_var = df[:,y_var]
+                
+            self.y_dim = 0
+            if encode:
+                self.hot_encode_y()
+                
         # getting Images Location
-        self.Imgs = csv_file[image_dir].values
+        if image_dir is None:
+            self.image_is_dir = True
+            if isinstance(df, pd.DataFrame):
+                self.Imgs = df[image_dir].values
+            else:
+                raise('For Image Location, the df must be a dataframe')
+        else:
+            self.image_is_dir = False
+            if isinstance(df, pd.DataFrame):
+                if y_var is None:
+                    self.Imas = df.values
+                else
+                    self.Imgs = df.drop(y_var, axis=1).values
+            else:
+                if y_var is None:
+                    self.Imgs = df
+                else:
+                    self.Imgs = df[:,-y_var]
         
         #Setting other vars
         self.batch_size = batch_size
@@ -83,7 +114,7 @@ class DataGenerator(Sequence):
             self.read_mode = cv2.IMREAD_UNCHANGED
         
         
-        
+        #Checks!
         assert 0 <= vertical_flip <=1, "vertical_flip = {}, which is not between 0 or 1".format(vertical_flip)
         self.v_flip = vertical_flip
         
@@ -166,6 +197,7 @@ class DataGenerator(Sequence):
             self.save_path = save_model_path
         else:
             self.save_path = None
+            
     def _generate_X(self, Batch_Idx):
         """Generates data containing batch_size images
         :param list_IDs_temp: list of label ids to load
@@ -177,7 +209,10 @@ class DataGenerator(Sequence):
         # Generate data
         for i, ID in enumerate(Batch_Idx):
             # Store sample
-            X[i,] = self._load_image(self.Imgs[ID])
+            if self.image_is_dir:
+                X[i,] = self._load_image(self.Imgs[ID])
+            else:
+                
 
         return X
     
@@ -188,15 +223,14 @@ class DataGenerator(Sequence):
     
     def hot_encode_y(self):
         #self.y = pd.get_dummies(pd.Categorical(self.y_var)).values
-        self.y = to_categorical(self.y_var)
-        print("Number of Encodings is {}".format(self.y.shape[1]))
-        self.y_dim = self.y.shape[1]      
+        if self.y_var is not None:
+            self.y = to_categorical(self.y_var)
+            print("Number of Encodings is {}".format(self.y.shape[1]))
+            self.y_dim = self.y.shape[1]      
 
-
-    def _load_image(self, image_path):
-        
-        img = cv2.imread(image_path,  self.read_mode) #load an image as grayscale
-        
+    def _process_images(self,
+                        img):
+        """Processes the images"""
         if img.shape != self.dim:
             img = cv2.resize(img, self.dim)
         
@@ -214,6 +248,12 @@ class DataGenerator(Sequence):
             img = np.expand_dims(img,2)
 
         return(img)
+    
+    def _load_image(self, image_path):
+        
+        img = cv2.imread(image_path,  self.read_mode) #load an image as grayscale
+
+        return(self._process_images(img))
         
     def _flip_vertical(self, img):
         """Flips and image on a  vertica axis, as set by v_flip,
@@ -260,6 +300,8 @@ class DataGenerator(Sequence):
             return(img)
         else:
             return(img)
+    def plot(self, img_idx):
+        plt.plot(self.Imgs[i,:])
         
         
         
