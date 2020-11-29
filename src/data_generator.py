@@ -29,7 +29,9 @@ class DataGenerator_array(Sequence):
                  rotate: tuple = (0,0), #Prob, max roatioan
                  shear: tuple = (0,0),  #prob, max_shear
                  noise: tuple = (0,0), #mean, STD (127, 40)
+                 scale: float = 255.0,
                  shuffle: bool =True,
+                 reduce_float: bool = True,
                  sample_classes: int = 0,
                  save_model_path: bool = None):
         """Initialization of the DataGenerator Glass
@@ -51,7 +53,9 @@ class DataGenerator_array(Sequence):
                                                     1) The % chance of shear
                                                     2) The amount of shear
             noise - {tuple - (mean, std)} - adding noise to an image
+            scale - {float,int} - the value to scale the image buy
             shuffle - {bool} - shuffle label indexes after every epoch
+            reduce_float - {bool} - downsample from float64 to float32
             sample_classes - {bool} - random samle n number from each class
         """
         
@@ -87,6 +91,8 @@ class DataGenerator_array(Sequence):
         else:
             self.read_mode = cv2.IMREAD_UNCHANGED
         
+        self.scale = scale
+        self.float32 = reduce_float
         
         #Checks!
         assert 0 <= vertical_flip <=1, "vertical_flip = {}, which is not between 0 or 1".format(vertical_flip)
@@ -140,9 +146,9 @@ class DataGenerator_array(Sequence):
 
         if self.fit:
             y = self._generate_y(Batch_Idx)
-            return X, y, [None]
+            return X, y
         else:
-            return X, [None]
+            return X
         
     #TODO add a def __iter__ and __next__ methodology so we can loop through it!
 
@@ -200,11 +206,21 @@ class DataGenerator_array(Sequence):
         return X
     
     def _generate_y(self, Batch_Idx):
+        """Generate data number batch_size from index to pull y from
+        
+        Arguments:
+            Batch_Idx - {np.array} - the index numbers of batchs to use
+            
+        Return:
+            tuple of y
+        
+        """
         if self.y is None:
-            y = self.x[Batch_Idx,]/225.0
+            y = self.x[Batch_Idx,]
         else:
             y = self.y[Batch_Idx]
         #y = self.y[Batch_Idx]
+        y=y/self.scale
         return y
     
     def hot_encode_y(self):
@@ -239,7 +255,10 @@ class DataGenerator_array(Sequence):
             #img = img.reshape(self.dim[0],self.dim[1],self.channels)
             img = np.expand_dims(img,2)
             
-        img = img/255.0
+        img = img/self.scale
+        
+        if self.float32 is True:
+            img = np.float32(img)
         return(img)
         
     def _flip_vertical(self, img):
@@ -581,21 +600,24 @@ class DataGenerator_file(Sequence):
         plt.imshow(self.x[img_idx,])
         
         
-def Plot_Val_Test(Model_hist):
+def Plot_Val_Test(Model_hist, metric='mse'):
     """
     param: Model_hist -> the training history of a model
     
     Purpose: To graph test vs. Validation of the model over 
     """
-    acc = Model_hist.history['accuracy']
-    val_acc = Model_hist.history['val_accuracy']
-    loss = Model_hist.history['loss']
-    val_loss = Model_hist.history['val_loss']
+    acc = Model_hist.history[metric]
     epochs = range(len(acc))
-
-    plt.plot(epochs, acc, 'r', label='Training accuracy')
-    plt.plot(epochs, val_acc, 'b', label='Validation accuracy')
-    plt.title('Training and validation accuracy')
+    plt.plot(epochs, acc, 'r', label='Training ' + metric)
+    
+    
+    if 'val_'+metric in Model_hist.history:
+        val_acc = Model_hist.history['val_' + metric]
+        plt.plot(epochs, val_acc, 'b', label='Validation ' + metric)
+        plt.title('Training and validation ' + metric)
+    else:
+        plt.title('Training ' + metric) 
+   
     plt.legend(loc=0)
     plt.figure()
     plt.show()
