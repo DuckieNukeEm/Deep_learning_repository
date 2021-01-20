@@ -9,6 +9,138 @@ from tensorflow.keras.callbacks import ModelCheckpoint
 #gpus=tf.config.experimental.list_physical_devices('GPU')
 #tf.config.experimental.set_memory_growth(gpus[0], True)
 
+
+
+
+
+def flip_vertical(img, v_flip_chance):
+    """Flips and image on a  vertica axis,
+    Arguments:
+        img - img to flip
+        v_flip_chance {int} - the probability of an image should be flipped
+    
+    Details:
+        if set to zero, will never flip the image
+    
+    Returns:
+        np.array
+    """
+    if v_flip_change <= 0:
+        return(img)
+    elif 1 - v_flip_chance < np.random.uniform():
+        img = cv2.flip(img,1)
+        return(img)
+    else:
+        return(img)
+
+def flip_horizontal(img, h_flip_chance):
+    """Flips ad image on a horizontal axis,
+    Arguments:
+        img {np.array} - img to flip
+        h_flip_chance {float} - the probabilty of an image to be flipped
+    
+    Details:
+        if set to zero, will never flip the image
+    
+    Returns:
+        np.array
+    """
+    if h_flip_chance <= 0:
+        return(img)
+    elif 1 - h_flip_chance < np.random.uniform():
+        img = cv2.flip(img,0)
+        return(img)
+    else:
+        return(img)
+
+def rotate(img, rotate_prob, rotate_degree):
+    """rotates an image around the central point
+    
+    ARguments:
+        img - the image to rotate
+        rotate_prob {float} -- the probability of an image to be rotated
+        rotate_degree {float} -- the highest degree to rotate by
+        
+    Details:
+        if rotate_prob <=0, then it will never rotate
+    
+    returns
+        img (np.array)
+    
+    """
+    if rotate_prob <= 0:
+        return(img)
+    if 1 - rotate_prob < np.random.uniform():
+        rows, cols = img.shape[0], img.shape[1]
+        #TODO allow a rotation both forward and backwards
+        Rot_M = cv2.getRotationMatrix2D((cols / 2, rows / 2), np.random.uniform(rotate_degree), 1)
+        img = cv2.warpAffine(img, Rot_M, (cols, rows))
+        return(img)
+    else:
+        return(img)
+
+def shear(img, shear_prob, shear_factor):
+    """shears an image
+    
+    Arguments:
+        img - the image to shear
+        shear_prob {float} - the probability of shearing an image
+        shear_factor {float} - upto the factor to shear by
+    
+    Detailts:
+        if shear_prob <= 0, then no shearing will be done
+    
+    Source:
+        https://blog.paperspace.com/data-augmentation-for-object-detection-rotation-and-shearing/
+        
+    Return
+        img - a numpy array
+    """
+    if shear_prob <= 0:
+        return(img)
+    elif 1 - shear_prob < np.random.uniform():
+        #TODO allow a shear both forward and backwards
+        rows, cols = img.shape[0], img.shape[1]
+
+        shear_factor = np.random.uniform(shear_factor)
+
+        M = np.array([[1, shear_factor, 0],[0,1,0]])
+        nW =  img.shape[1] + abs(shear_factor*img.shape[0])
+        img = cv2.warpAffine(img, M, (int(nW), img.shape[0]))
+        img = cv2.resize(img, (cols,rows))
+        return(img)
+    else:
+        return(img)
+
+def noise(img, 
+          Mu: float, 
+          Std: float,
+          Dim: tuple, 
+          Min_value: int = 0,
+          Max_value: int = 255): # noise_std, noise_mu, dim
+    """adds random noise to an image
+    
+    Arguments:
+        img - img to add noise too
+        Mu {float} - the mean value of the noise of a gaussian distirbution
+        Std {float} - the STD of the guassian distribution for noise generation
+        Dim {int) - the number of dimensions to add noise too
+        Min_value {int} - minmum value of noise
+        Max_value {int} - max value of noise
+    Details:
+        if Std is zero, then no noise will be added
+        
+    Returns
+        img - np array
+    """
+    gaussian = np.random.normal(Mu,Std,Dim)
+
+    #adding limit to it
+    gaussian[gaussian < Min_value] = Min_value
+    gaussian[gaussian > Max_value] = Max_value
+    img = img + gaussian
+    return(img)
+
         
 
 class DataGenerator_array(Sequence):
